@@ -1,0 +1,80 @@
+name: Update
+
+on:
+  schedule:
+    - cron: '0 0 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  update-json:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: 1.24
+          cache: true
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v16
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+
+
+      - name: Build darwin.json
+        run: |
+          cd ".github/go"
+          go mod tidy
+          go run darwin/main.go
+          mv darwin.json ../../darwin.json
+
+
+      - name: Build home-manager.json
+        run: |
+          result=$(nix build github:nix-community/home-manager/master#docs-json --no-write-lock-file --print-out-paths --no-link)
+          echo "Path generated: $result"
+          cp -r $result/share/doc/home-manager/options.json home-manager.json
+
+
+      - name: Build nixos.json
+        run: |
+          cd ".github/go"
+          go mod tidy
+          go run nixos/main.go
+          mv nixos.json ../../nixos.json
+
+
+      - name: Build nixpkgs.json
+        run: |
+          cd ".github/go"
+          go mod tidy
+          go run nixpkgs/main.go
+          mv nixpkgs.json ../../nixpkgs.json
+
+      - name: Build nur.json
+        run: |
+          cd ".github/go"
+          go mod tidy
+          go run nur/main.go
+          mv nur.json ../../nur.json
+
+      - name: Get current datetime
+        id: date
+        run: echo "now=$(date -u +"%Y-%m-%d %H:%M UTC")" >> $GITHUB_OUTPUT
+
+      - name: Upload JSON to GitHub release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: "latest"
+          name: "Automatic JSON dump"
+          body: "Generated on ${{ steps.date.outputs.now }}"
+          files: darwin.json,home-manager.json,nixos.json,nixpkgs.json,nur.json
+          make_latest: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
