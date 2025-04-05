@@ -46,7 +46,10 @@ jobs:
         run: |
           cd ".github/go"
           go mod tidy
-          go run nixos/main.go
+          output=$(go run nixos/main.go)
+          echo "$output"
+          version=$(echo "$output" | grep "Latest release:" | cut -d' ' -f3)
+          echo -n "$version" > ../../version
           mv nixos.json ../../nixos.json
 
 
@@ -64,17 +67,21 @@ jobs:
           go run nur/main.go
           mv nur.json ../../nur.json
 
-      - name: Get current datetime
-        id: date
-        run: echo "now=$(date -u +"%Y-%m-%d %H:%M UTC")" >> $GITHUB_OUTPUT
+      - name: Get informations
+        id: info
+        run: |
+          echo "now=$(date -u +"%Y-%m-%d %H:%M UTC")" >> $GITHUB_OUTPUT
+          echo "version=$(cat version)" >> $GITHUB_OUTPUT
 
       - name: Upload JSON to GitHub release
         uses: softprops/action-gh-release@v1
         with:
           tag_name: "latest"
           name: "Automatic JSON dump"
-          body: "Generated on ${{ steps.date.outputs.now }}"
-          files: darwin.json,home-manager.json,nixos.json,nixpkgs.json,nur.json
+          body: |
+            Generated on ${{ steps.info.outputs.now }}
+            Nixpkgs Version: ${{ steps.info.outputs.version }}
+          files: darwin.json,home-manager.json,nixos.json,nixpkgs.json,nur.json,version
           make_latest: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
